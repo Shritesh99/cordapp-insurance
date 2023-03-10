@@ -40,8 +40,23 @@ task runTemplateClient(type: JavaExec, dependsOn: assemble) {
 /* This task will start the springboot server that connects to your node (via RPC connection). All of the http requests
  * are in the Controller file. You can leave the Server.kt and NodeRPCConnection.kt file untouched for your use.
  */
-task runTemplateServer(type: JavaExec, dependsOn: assemble) {
+task runCustomerServer(type: JavaExec, dependsOn: assemble) {
     classpath = sourceSets.main.runtimeClasspath
     main = 'com.template.webserver.Starter'
-    args '--server.port=10050', '--config.rpc.host=localhost', '--config.rpc.port=10006', '--config.rpc.username=user1', '--config.rpc.password=test'
+    args '--server.port=50005', '--config.rpc.host=localhost', '--config.rpc.port=10006', '--config.rpc.username=user1', '--config.rpc.password=test'
+}
+task runInsuranceCompanyServer(type: JavaExec, dependsOn: assemble) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.template.webserver.Starter'
+    args '--server.port=50006', '--config.rpc.host=localhost', '--conf_ig.rpc.port=10009', '--config.rpc.username=user1', '--config.rpc.password=test'
+}
+task runHospitalServer(type: JavaExec, dependsOn: assemble) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.template.webserver.Starter'
+    args '--server.port=50007', '--config.rpc.host=localhost', '--config.rpc.port=100012', '--config.rpc.username=user1', '--config.rpc.password=test'
+}
+task runAuditorServer(type: JavaExec, dependsOn: assemble) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.template.webserver.Starter'
+    args '--server.port=50008', '--config.rpc.host=localhost', '--config.rpc.port=10014', '--config.rpc.username=user1', '--config.rpc.password=test'
 }

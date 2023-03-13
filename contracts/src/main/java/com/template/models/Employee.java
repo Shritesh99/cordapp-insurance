@@ -1,20 +1,23 @@
 package com.template.models;
 
+import net.corda.core.serialization.ConstructorForDeserialization;
 import net.corda.core.serialization.CordaSerializable;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 @CordaSerializable
 public class Employee {
     private final String id;
     private final String empId;
-    private String designation;
+    final private String designation;
     private final String name;
     private final String address;
-    private final LocalDate dob;
+    private final String dob;
     private final String medicalId;
-
-    public Employee(String id, String empId, String name, String address, LocalDate dob, String medicalId, String designation) {
+//    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d/MM/yyyy");
+    @ConstructorForDeserialization
+    public Employee(String id, String empId,  String designation, String name, String address, String dob, String medicalId) {
         this.id = id;
         this.empId = empId;
         this.name = name;
@@ -44,7 +47,7 @@ public class Employee {
         return address;
     }
 
-    public LocalDate getDob() {
+    public String getDob() {
         return dob;
     }
 

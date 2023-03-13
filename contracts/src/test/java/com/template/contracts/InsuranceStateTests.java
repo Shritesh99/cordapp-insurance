@@ -2,7 +2,6 @@ package com.template.contracts;
 
 import com.template.models.Employee;
 import com.template.models.Insurance;
-import com.template.models.InsuranceTests;
 import com.template.states.InsuranceState;
 import net.corda.core.identity.Party;
 import org.junit.Test;

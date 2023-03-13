@@ -5,18 +5,12 @@ import com.template.models.Insurance;
 import com.template.models.InsuredEmployee;
 import com.template.models.Organization;
 import com.template.states.InsuranceState;
-import net.corda.core.contracts.UniqueIdentifier;
 import net.corda.core.identity.CordaX500Name;
 import net.corda.testing.core.TestIdentity;
 import net.corda.testing.node.MockServices;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.jupiter.api.BeforeAll;
-
-import java.time.LocalDate;
-import java.time.Month;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 
 import static net.corda.testing.node.NodeTestUtils.ledger;
@@ -40,10 +34,10 @@ public class InsuranceContractTest {
         hospital = new TestIdentity(new CordaX500Name("PQR Hospitals",  "Mumbai",  "IN"));
 
         org = new Organization("2121", "ABC Inc.");
-        emp = new Employee("12121","1222", "Test", "ghar", LocalDate.of(1997, Month.AUGUST, 23), "11122", "SWE");
-        insurance = new Insurance("122", "2332", emp, LocalDate.now(), LocalDate.now().plusYears(10));
+        emp = new Employee("12121","1222", "Test", "ghar", "10/10/1998", "11122", "SWE");
+        insurance = new Insurance("122", "2332", "10/03/2023", "10/03/2033");
         org.addEmployee(emp);
-        insuredEmployee = new InsuredEmployee("1234", insurance, emp);
+        insuredEmployee = new InsuredEmployee("1234");
     }
     @Test
     public void initInsuranceState() {

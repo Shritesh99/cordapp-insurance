@@ -59,9 +59,9 @@ public class InsuranceContract implements Contract {
                 this.insuredEmployee = insuredEmployee;
             }
 
-            public AddInsuredEmployee(String id, String insuredEmpId, Employee emp, Insurance insurance){
-                this.insuredEmployee = new InsuredEmployee(insuredEmpId, insurance, emp);
-            }
+//            public AddInsuredEmployee(String id, String insuredEmpId, Employee emp, Insurance insurance){
+//                this.insuredEmployee = new InsuredEmployee(insuredEmpId, insurance, emp);
+//            }
         }
         class RemoveInsuredEmployee implements Commands {
             private String id;

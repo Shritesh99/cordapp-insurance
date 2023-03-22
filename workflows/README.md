@@ -1,15 +1,14 @@
 # Flow commands
 
-### Init flow
+### Issue flow
 ```
-flow start InsuranceInitFlow$InsuranceInitFlowInitiator hospital: "O=Hospital,L=Mumbai,C=IN", organization: "O=Organization,L=London,C=GB"
+flow start InsuranceIssueFlow$InsuranceIssueFlowInitiator hospital: "O=Hospital,L=Mumbai,C=IN", organization: "O=Organization,L=London,C=GB", auditor: "O=Auditor,L=Dublin,C=IE", empId: "123", amount: 1000, policyNo: "111", endDate: "2033-02-15T00:00:00.00Z"
 ```
-### Add Employee flow
+### Check
 ```
-
+run vaultQuery contractStateType: com.template.states.InsuranceState
 ```
-
-### Add Employee flow
+### Clam flow
 ```
-flow start InsuranceRemoveFlow$InsuranceRemoveFlowInitiator insuranceCompany: "O=InsuranceCompany,L=New York,C=US", hospital: "O=Hospital,L=Mumbai,C=IN", id: "111"
+flow start InsuranceClaimFlow$InsuranceIssueClaimInitiator hospital: "O=Hospital,L=Mumbai,C=IN", organization: "O=Organization,L=London,C=GB", auditor: "O=Auditor,L=Dublin,C=IE", policyNo: "111", claim: 10
 ```

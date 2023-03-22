@@ -8,6 +8,7 @@ import net.corda.core.contracts.StateAndRef;
 import net.corda.core.contracts.TransactionResolutionException;
 import net.corda.core.crypto.SecureHash;
 import net.corda.core.flows.*;
+import net.corda.core.identity.CordaX500Name;
 import net.corda.core.identity.Party;
 import net.corda.core.node.services.Vault;
 import net.corda.core.node.services.vault.QueryCriteria;
@@ -19,21 +20,37 @@ import org.jetbrains.annotations.NotNull;
 
 import java.security.SignatureException;
 import java.util.Arrays;
-import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
 
-public class InsuranceRemoveFlow {
+public class InsuranceIssueFlow {
+
     @CordaSerializable
-    enum TransactionRole {ORGANIZATION, INSURANCE_COMPANY, HOSPITAL}
+    enum TransactionRole {ORGANIZATION, INSURANCE_COMPANY, HOSPITAL, AUDITOR}
 
     @InitiatingFlow
     @StartableByRPC
-    public static class InsuranceRemoveFlowInitiator extends FlowLogic<SignedTransaction> {
+    public static class InsuranceIssueFlowInitiator extends FlowLogic<SignedTransaction>{
 
-        private final Party insuranceCompany;
         private final Party hospital;
-        private final String id;
+        private final Party organization;
+        Party auditor;
+        String empId;
+        int amount;
+        String policyNo;
+        String endDate;
 
-        private final ProgressTracker.Step GENERATING_TRANSACTION = new ProgressTracker.Step("Generating transaction based on new IOU.");
+        public InsuranceIssueFlowInitiator(Party hospital, Party organization, Party auditor, String empId, int amount, String policyNo, String endDate) {
+            this.hospital = hospital;
+            this.organization = organization;
+            this.auditor = auditor;
+            this.empId = empId;
+            this.amount = amount;
+            this.policyNo = policyNo;
+            this.endDate = endDate;
+        }
+
+        private final ProgressTracker.Step GENERATING_TRANSACTION = new ProgressTracker.Step("Generating transaction...");
         private final ProgressTracker.Step VERIFYING_TRANSACTION = new ProgressTracker.Step("Verifying contract constraints.");
         private final ProgressTracker.Step SIGNING_TRANSACTION = new ProgressTracker.Step("Signing transaction with our private key.");
         private final ProgressTracker.Step GATHERING_SIGS = new ProgressTracker.Step("Gathering the counterparty's signature.") {
@@ -57,38 +74,31 @@ public class InsuranceRemoveFlow {
                 FINALISING_TRANSACTION
         );
         @Override
-        public ProgressTracker getProgressTracker() {
-            return progressTracker;
-        }
-        public InsuranceRemoveFlowInitiator(Party insuranceCompany, Party hospital, String id){
-            this.hospital = hospital;
-            this.insuranceCompany = insuranceCompany;
-            this.id = id;
-        }
-        @Override
         @Suspendable
         public SignedTransaction call() throws FlowException {
-            Party organization = getOurIdentity();
-            final Party notary = getServiceHub().getNetworkMapCache().getNotaryIdentities().get(0);
+            Party insuranceCompany = getOurIdentity();
+            final Party notary = getServiceHub().getNetworkMapCache().getNotary(CordaX500Name.parse("O=Notary,L=London,C=GB"));
 
             progressTracker.setCurrentStep(GENERATING_TRANSACTION);
+            // Checking Emp ID exist
             QueryCriteria.VaultQueryCriteria criteria = new QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED);
             Vault.Page<InsuranceState> results = getServiceHub().getVaultService().queryBy(InsuranceState.class, criteria);
 
-            StateAndRef<InsuranceState> latestInsuranceStateRef = results.getStates().stream()
-                    .filter(insuranceStateRef -> insuranceStateRef.getState().getData().getInsuranceCompany().equals(insuranceCompany)
+            boolean alreadyExist = results.getStates().stream()
+                    .anyMatch(insuranceStateRef -> insuranceStateRef.getState().getData().getInsuranceCompany().equals(insuranceCompany)
                             && insuranceStateRef.getState().getData().getOrganization().equals(organization)
                             && insuranceStateRef.getState().getData().getHospital().equals(hospital)
-                    )
-                    .max(Comparator.comparing(insuranceStateStateAndRef -> insuranceStateStateAndRef.getRef().getTxhash()))
-                    .orElseThrow(() -> new FlowException("No InsuranceState found for the given insurance company and organization"));
+                            && insuranceStateRef.getState().getData().getAuditor().equals(auditor)
+                            && insuranceStateRef.getState().getData().getEmpId() == empId
+                    );
 
-            InsuranceState latestInsuranceState = latestInsuranceStateRef.getState().getData();
-            InsuranceState outputState = latestInsuranceState.removeInsuredEmployee(id);
+            if(alreadyExist) throw new FlowException("Emp Id already exist");
+
+            final InsuranceState output = new InsuranceState(insuranceCompany, organization, hospital,auditor, empId, amount, policyNo, endDate);
+            assert notary != null;
             final TransactionBuilder builder = new TransactionBuilder(notary);
-            builder.addInputState(latestInsuranceStateRef);
-            builder.addOutputState(outputState);
-            builder.addCommand(new InsuranceContract.Commands.RemoveInsuredEmployee(id), Arrays.asList(this.insuranceCompany.getOwningKey(), organization.getOwningKey(), this.hospital.getOwningKey()));
+            builder.addOutputState(output);
+            builder.addCommand(new InsuranceContract.Commands.Issue(), Arrays.asList(getOurIdentity().getOwningKey(), this.organization.getOwningKey(), this.hospital.getOwningKey(), this.auditor.getOwningKey()));
 
             progressTracker.setCurrentStep(VERIFYING_TRANSACTION);
             builder.verify(getServiceHub());
@@ -97,21 +107,24 @@ public class InsuranceRemoveFlow {
             final SignedTransaction signedTx = getServiceHub().signInitialTransaction(builder);
 
             progressTracker.setCurrentStep(GATHERING_SIGS);
-            FlowSession companySession = initiateFlow(insuranceCompany);
-            companySession.send(TransactionRole.INSURANCE_COMPANY);
+            FlowSession orgSession = initiateFlow(organization);
+            orgSession.send(TransactionRole.ORGANIZATION);
 
             FlowSession hospitalSession = initiateFlow(hospital);
             hospitalSession.send(TransactionRole.HOSPITAL);
 
-            SignedTransaction stx = subFlow(new CollectSignaturesFlow(signedTx, Arrays.asList(companySession, hospitalSession), GATHERING_SIGS.childProgressTracker()));
+            FlowSession auditorSession = initiateFlow(auditor);
+            auditorSession.send(TransactionRole.AUDITOR);
+
+            SignedTransaction stx = subFlow(new CollectSignaturesFlow(signedTx, Arrays.asList(hospitalSession, orgSession, auditorSession), GATHERING_SIGS.childProgressTracker()));
 
             progressTracker.setCurrentStep(FINALISING_TRANSACTION);
-            return subFlow(new FinalityFlow(stx, Arrays.asList(companySession, hospitalSession)));
+            return subFlow(new FinalityFlow(stx, Arrays.asList(orgSession, hospitalSession, auditorSession)));
         }
     }
 
-    @InitiatedBy(InsuranceRemoveFlowInitiator.class)
-    public static class InsuranceRemoveFlowResponder extends FlowLogic<SignedTransaction>{
+    @InitiatedBy(InsuranceIssueFlowInitiator.class)
+    public static class InsuranceIssueFlowResponder extends FlowLogic<SignedTransaction>{
 
         private final FlowSession counterpartySession;
 
@@ -144,12 +157,10 @@ public class InsuranceRemoveFlow {
         }
 
 
-        //Constructor
-        public InsuranceRemoveFlowResponder(FlowSession counterpartySession) {
+        public InsuranceIssueFlowResponder(FlowSession counterpartySession) {
             this.counterpartySession = counterpartySession;
             this.progressTracker = tracker();
         }
-
 
         @NotNull
         @Override
@@ -162,7 +173,7 @@ public class InsuranceRemoveFlow {
             progressTracker.setCurrentStep(RECEIVING_ROLE);
             final TransactionRole myRole = counterpartySession.receive(TransactionRole.class).unwrap(it -> it);
 
-            progressTracker.setCurrentStep(SIGNING_TRANSACTION);;
+            progressTracker.setCurrentStep(SIGNING_TRANSACTION);
             final SignTransactionFlow signTransactionFlow = new SignTransactionFlow(counterpartySession) {
                 @Suspendable
                 @Override
@@ -172,23 +183,30 @@ public class InsuranceRemoveFlow {
                         switch (myRole) {
                             case HOSPITAL: {
                                 relevant = stx.toLedgerTransaction(getServiceHub(), false)
-                                        .inputsOfType(InsuranceState.class)
+                                        .outputsOfType(InsuranceState.class)
                                         .stream()
                                         .anyMatch(it -> it.getHospital().equals(getOurIdentity()));
                             }
                             break;
-                            case INSURANCE_COMPANY: {
+                            case ORGANIZATION: {
                                 relevant = stx.toLedgerTransaction(getServiceHub(), false)
-                                        .inputsOfType(InsuranceState.class)
+                                        .outputsOfType(InsuranceState.class)
                                         .stream()
-                                        .anyMatch(it -> it.getInsuranceCompany().equals(getOurIdentity()));
+                                        .anyMatch(it -> it.getOrganization().equals(getOurIdentity()));
                             }
                             break;
+                            case AUDITOR:{
+                                // Check Attachment
+                                // stx.toLedgerTransaction(getServiceHub(), false).component4().get(0).extractFile();
+                                relevant = stx.toLedgerTransaction(getServiceHub(), false)
+                                        .outputsOfType(InsuranceState.class)
+                                        .stream()
+                                        .anyMatch(it -> it.getAuditor().equals(getOurIdentity()));
+                            }break;
                             default:
                                 throw new FlowException("Unexpected value: " + myRole);
                         }
-                    } catch (SignatureException | AttachmentResolutionException |
-                             TransactionResolutionException ex) {
+                    } catch (SignatureException | AttachmentResolutionException | TransactionResolutionException ex) {
                         throw new FlowException(ex);
                     }
                     if (!relevant) throw new FlowException("Invalid Hospital");

@@ -21,54 +21,37 @@ public class InsuranceContract implements Contract {
     public void verify(@NotNull LedgerTransaction tx) throws IllegalArgumentException {
         final CommandData commandData = tx.getCommands().get(0).getValue();
 
-        if (commandData instanceof InsuranceContract.Commands.Init) {
+        if (commandData instanceof InsuranceContract.Commands.Issue) {
             requireThat(require -> {
-                require.using("No inputs should be consumed when sending the Init Command", tx.getInputStates().size() == 0);
-                require.using("Only one should be consumed when sending the Init Command", tx.getOutputStates().size() == 1);
+                require.using("No inputs should be consumed when sending the Issue Command", tx.getInputStates().size() == 0);
+                require.using("Only one should be consumed when sending the Issue Command", tx.getOutputStates().size() == 1);
                 return null;
             });
         }
-        if(commandData instanceof InsuranceContract.Commands.AddInsuredEmployee){
+        if(commandData instanceof InsuranceContract.Commands.Claim){
             InsuranceState input = tx.inputsOfType(InsuranceState.class).get(0);
             InsuranceState output = tx.outputsOfType(InsuranceState.class).get(0);
             requireThat(require -> {
-                require.using("Id already exist", !input.checkIdExist(((Commands.AddInsuredEmployee) commandData).id));
-                require.using("Id does not exist", output.checkIdExist(((Commands.AddInsuredEmployee) commandData).id));
+                require.using("Only One should be consumed when sending the Claim Command", tx.getInputStates().size() == 1);
+                require.using("Only one should be consumed when sending the Claim Command", tx.getOutputStates().size() == 1);
+                require.using("Claim should be less than the total amount", output.getAmount()>=output.getClaimed());
                 return null;
             });
         }
-        if(commandData instanceof InsuranceContract.Commands.RemoveInsuredEmployee){
+        if(commandData instanceof InsuranceContract.Commands.End){
             InsuranceState input = tx.inputsOfType(InsuranceState.class).get(0);
             InsuranceState output = tx.outputsOfType(InsuranceState.class).get(0);
             requireThat(require -> {
-                require.using("Id does not exist", input.checkIdExist(((Commands.RemoveInsuredEmployee) commandData).id));
-                require.using("Id already exist", !output.checkIdExist(((Commands.RemoveInsuredEmployee) commandData).id));
+                require.using("Only one should be consumed when sending the End Command", tx.getInputStates().size() == 1);
+                require.using("No inputs should be consumed when sending the End Command", tx.getOutputStates().size() == 0);
                 return null;
             });
         }
     }
 
     public interface Commands extends CommandData {
-        class Init extends TypeOnlyCommandData implements Commands {}
-        class AddInsuredEmployee implements Commands {
-            private String id;
-            private InsuredEmployee insuredEmployee;
-            @ConstructorForDeserialization
-            public AddInsuredEmployee(String id, InsuredEmployee insuredEmployee) {
-                this.id = id;
-                this.insuredEmployee = insuredEmployee;
-            }
-
-//            public AddInsuredEmployee(String id, String insuredEmpId, Employee emp, Insurance insurance){
-//                this.insuredEmployee = new InsuredEmployee(insuredEmpId, insurance, emp);
-//            }
-        }
-        class RemoveInsuredEmployee implements Commands {
-            private String id;
-            @ConstructorForDeserialization
-            public RemoveInsuredEmployee(String id) {
-                this.id = id;
-            }
-        }
+        class Issue extends TypeOnlyCommandData implements Commands {}
+        class Claim extends TypeOnlyCommandData implements Commands {}
+        class End extends TypeOnlyCommandData implements Commands {}
     }
 }
